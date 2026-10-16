@@ -61,8 +61,16 @@ const colorFor = (s) => {
 let tabSeq = 0;
 
 async function newTab(input = '', { activate = true, restore = false } = {}) {
-  const tab = { id: null, url: '', title: 'Neuer Tab', el: null, loading: false, started: 0, stats: null };
-  const res = await api.post('/api/tab', input ? { url: input } : {});
+  const tab = { id: null, url: '', title: 'Neuer Tab', el: null, loading: false, started: 0, stats: null,
+    revealT: 0, stallT: 0 };
+  let res;
+  try {
+    res = await api.post('/api/tab', input ? { url: input } : {});
+  } catch (err) {
+    // Without this the whole app would just sit there: no tab, no message, dark stage.
+    toast('Tab konnte nicht geöffnet werden: ' + (err.message ?? err));
+    throw err;
+  }
   tab.id = res.id;
   tab.url = res.url ?? '';
   const frame = document.createElement('iframe');
@@ -75,6 +83,7 @@ async function newTab(input = '', { activate = true, restore = false } = {}) {
   frame.setAttribute('fetchpriority', 'high');
   frame.dataset.tab = tab.id;
   frame.addEventListener('load', () => {
+    settleFrame(tab);
     state.loading.delete(tab.id);
     setProgress();
     frame.classList.add('on');
@@ -87,8 +96,9 @@ async function newTab(input = '', { activate = true, restore = false } = {}) {
   });
   tab.el = frame;
   $('#frames').append(frame);
+  showEmpty(false);
   if (res.proxied) navigate(tab, res.proxied, { realUrl: tab.url });
-  else frame.src = '/start';
+  else armFrame(tab, '/start');
   state.tabs.set(tab.id, tab);
   state.order.push(tab.id);
   if (activate) activateTab(tab.id);
@@ -98,24 +108,76 @@ async function newTab(input = '', { activate = true, restore = false } = {}) {
   return tab;
 }
 
-function navigate(tab, proxied, { realUrl = '' } = {}) {
-  if (!proxied) return;
-  tab.el.src = proxied;
+/**
+ * Point a tab's frame at a proxied URL — and never leave it invisible just because the page is slow.
+ *
+ * `load` on an iframe fires only after *every* subresource settled, so one long-poll, one open
+ * websocket or one dead ad host would keep the tab black forever (the page behind it is fine, it is
+ * simply not shown). Two timers fix that: `reveal` makes the frame visible a beat later whatever has
+ * arrived so far, `stall` offers "neu laden / anhalten" if the page is still hanging.
+ */
+const REVEAL_MS = 1200;
+const STALL_MS = 12000;
+
+function armFrame(tab, src) {
+  const frame = tab.el;
+  if (!frame) return;
+  clearTimeout(tab.revealT);
+  clearTimeout(tab.stallT);
+  frame.classList.remove('stall');
+  frame.removeAttribute('loading'); // a lazy frame that was hidden once never loads again
   tab.loading = true;
   tab.started = performance.now();
   state.loading.add(tab.id);
-  if (realUrl) tab.url = realUrl;
+  tab.revealT = setTimeout(() => frame.classList.add('on'), REVEAL_MS);
+  tab.stallT = setTimeout(() => showStall(tab), STALL_MS);
+  frame.src = src;
   setProgress();
   renderTabs();
+}
+
+function settleFrame(tab) {
+  clearTimeout(tab.revealT);
+  clearTimeout(tab.stallT);
+  tab.revealT = tab.stallT = 0;
+  tab.loading = false;
+  if (tab.el) tab.el.classList.remove('stall');
+  hideStall();
+}
+
+let stalledTab = null;
+function showStall(tab) {
+  if (!tab?.id) return;
+  stalledTab = tab.id;
+  if (tab.el) tab.el.classList.add('stall');
+  const host = hostOf(tab.url) || 'Diese Seite';
+  $('#stallmsg').textContent = `${host} antwortet nicht vollständig — die Seite lädt noch.`;
+  $('#stall').hidden = false;
+  renderTabs();
+}
+function hideStall() {
+  stalledTab = null;
+  const el = $('#stall');
+  if (el) el.hidden = true;
+}
+
+function navigate(tab, proxied, { realUrl = '' } = {}) {
+  if (!proxied) return;
+  if (realUrl) tab.url = realUrl;
+  armFrame(tab, proxied);
 }
 
 function activateTab(id) {
   state.active = id;
   for (const t of state.tabs.values()) {
     t.el.classList.toggle('on', t.id === id);
-    if (t.id !== id) t.el.setAttribute('loading', 'lazy');
+    // only frames that have already loaded once are worth deferring
+    if (t.id !== id) { if (t.started === 0) t.el.setAttribute('loading', 'lazy'); }
+    else t.el.removeAttribute('loading');
   }
   const tab = state.tabs.get(id);
+  showEmpty(state.order.length === 0);
+  if (stalledTab === id) showStall(tab); else hideStall();
   if (tab) {
     $('#address').value = tab.url || '';
     document.title = tab.title && tab.title !== 'Neuer Tab' ? `${tab.title} · Chaos ADBrowser` : 'Chaos ADBrowser';
@@ -128,6 +190,7 @@ function activateTab(id) {
 function closeTab(id) {
   const tab = state.tabs.get(id);
   if (!tab) return;
+  settleFrame(tab);
   tab.el.remove();
   state.tabs.delete(id);
   state.order = state.order.filter((x) => x !== id);
@@ -239,8 +302,14 @@ async function submitAddress(value) {
     navigate(t, input);
     return;
   }
-  const { url } = await api.get('/api/resolve?q=' + encodeURIComponent(input));
-  if (!url) return;
+  let url = '';
+  try {
+    url = (await api.get('/api/resolve?q=' + encodeURIComponent(input))).url;
+  } catch (err) {
+    toast('Adresse konnte nicht aufgelöst werden: ' + (err.message ?? err));
+    return;
+  }
+  if (!url) { toast('Das sieht nicht nach einer Adresse oder Suchanfrage aus.'); return; }
   const t = activeTab() ?? await newTab('');
   if (url.startsWith('/')) navigate(t, url, { realUrl: location.origin + url });
   else navigate(t, toProxiedLocal(url, t.id), { realUrl: url });
@@ -443,7 +512,21 @@ function wire() {
   $('#closepanel').addEventListener('click', closePanel);
   $('#menu').addEventListener('click', () => openPanel('about'));
   $$('#paneltabs button').forEach((b) => b.addEventListener('click', () => openPanel(b.dataset.tab)));
-  $('#home').addEventListener('click', () => { const t = activeTab(); if (t) t.el.src = '/start'; else newTab(''); });
+  $('#home').addEventListener('click', () => { const t = activeTab(); if (t) armFrame(t, '/start'); else newTab(''); });
+  $('#stallreload').addEventListener('click', () => {
+    const tab = state.tabs.get(stalledTab ?? state.active);
+    if (!tab) return;
+    armFrame(tab, tab.el.src); // same url, fresh request
+  });
+  $('#stallstop').addEventListener('click', () => {
+    const tab = state.tabs.get(stalledTab ?? state.active);
+    if (!tab) return;
+    // stop the loader without losing what did arrive: about:blank would be a black page again
+    settleFrame(tab);
+    state.loading.delete(tab.id);
+    setProgress();
+    tab.el.classList.add('on');
+  });
   $('#reload').addEventListener('click', () => {
     const t = activeTab();
     if (!t) return;
@@ -537,6 +620,7 @@ async function boot() {
   }
   const last = state.order[state.order.length - 1];
   if (last) activateTab(last);
+  showEmpty(state.order.length === 0);
 }
 
 boot().catch((err) => {

@@ -116,6 +116,18 @@ body { overflow: hidden }
   opacity: 0; transition: opacity .16s ease; visibility: hidden;
 }
 #frames iframe.on { opacity: 1; visibility: visible }
+/* partial paint of a page that never finishes: show it, but say so */
+#frames iframe.stall.on { outline: 2px solid #f0a92b66; outline-offset: -2px }
+#stall { position: absolute; left: 50%; transform: translateX(-50%); bottom: 14px; z-index: 3;
+  display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-radius: 12px;
+  border: 1px solid #2a3348; background: #11141cf2; color: #dfe5f5; font-size: 13px;
+  box-shadow: 0 12px 30px #0007 }
+#stall button { appearance: none; border: 1px solid #2a3348; background: #161b26; color: #dfe5f5;
+  padding: 6px 10px; border-radius: 9px; font: inherit; cursor: pointer }
+#stall button:hover { border-color: #4d7cff }
+/* An author `display` rule beats the UA `[hidden]{display:none}` — without this line the dark
+   "kein Tab" layer would sit on top of every page forever (black tab area, nothing loads). */
+[hidden] { display: none !important }
 #empty { position: absolute; inset: 0; display: grid; place-items: center; background: var(--bg); color: var(--fg-dim); text-align: center; padding: 24px }
 #empty h2 { color: var(--fg); margin: 0 0 8px }
 #empty p { margin: 0 0 18px; max-width: 44ch }

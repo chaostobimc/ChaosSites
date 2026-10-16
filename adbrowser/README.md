@@ -154,6 +154,26 @@ Geht **nicht**, und das ist physikalisch/technisch, kein Bug:
   Service-Worker-App-Shell sein wollen (Service Worker sind im Proxy absichtlich aus).
 * `file:`/`ftp:`/`chrome://` gibt es nicht — nur http(s).
 
+## Fehlerbilder (schwarzer Tab, leere Seite, „passiert nichts“)
+
+Alle vier Varianten waren echte Bugs und sind jetzt getestet (`test/encoding.test.mjs`,
+`test/ui.test.mjs`):
+
+| Symptom | Ursache | Verhalten jetzt |
+|---|---|---|
+| Tab bleibt schwarz, obwohl die Seite lädt | `#empty`-Ebene (dunkel, `position:absolute; inset:0`) gewinnt gegen das `hidden`-Attribut, weil eine Autor-Regel `display:grid` setzt | `[hidden]{display:none!important}` — Regressionstest prüft die Invariante für alle Layerelemente |
+| Seite bleibt schwarz, bis „irgendwas“ fertig ist | `load` am `<iframe>` feuert erst, wenn *jedes* Subresource settled (Long-Poll, offene WebSocket-Verbindung, eine tote Ad-Host-Idee) | Rahmen wird nach 1,2 s sichtbar (was da ist), nach 12 s erscheint eine Leiste „antwortet nicht vollständig“ mit *Neu laden* / *Anhalten* |
+| Komische `content-encoding` → Binärmüll als HTML | Roher Deflate hinter `deflate`, doppeltes `gzip, gzip`, ein Middlebox-Leibwächter, der entpackt aber den Header dastehen lässt, oder ein Codec, den Node nicht hat | `decode.js` probiert alle Token (inkl. Sniffen der Magic Bytes); wenn nichts entpackt werden kann, wird die **gleiche URL einmal ohne Komprimierung** geholt und der Host gemerkt. Wenn immer noch Müll: lesbare Fehlerseite statt leerer Rahmen |
+| HTTP 200, aber 0 Bytes (Bot-Erkennung von Suchmaschinen/CDNs) | wir hätten einen leeren Rahmen übergeben | Seite „Der Server hat geantwortet, aber die Seite ist leer“ + *Erneut versuchen* |
+| Klick auf eine Datei → Rahmen bleibt, Download läuft im Hintergrund | `content-disposition: attachment` in einer Top-Level-Navigation | Download-Karte mit Dateinamen und echtem Link (der Request dann `Sec-Fetch-Dest: download` mitschickt und unterm Streamer durchgereicht wird) |
+
+Eigene Diagnose im laufenden Container:
+
+```bash
+curl -s localhost:6001/healthz                 # Engine + Filterstand
+curl -s localhost:6001/metrics | head -c 400   # Cache-Treffer, blockierte Requests
+CHAOS_LOG_LEVEL=debug docker compose logs -f adbrowser | grep -Ei "encoding|leer|error"
+```
 ## Sicherheit (bitte lesen)
 
 Ein Proxy, der fremde Inhalte ausliefert, ist ein **offener Relay**. Standard-Absicherung:
@@ -201,7 +221,8 @@ Alles davon läuft **ohne Internet**, weil der SSRF-Guard `/site/*` auf dem eige
 ## Tests & Werkzeuge
 
 ```bash
-npm test          # 53 Tests: Engine, Encoder, Cookies, Store, Rewriting, kompletter Proxy-e2e inkl. WebSocket-Tunnel
+npm test          # 70 Tests: Engine, Encoder, Cookies, Store, Rewriting, UI-Chrome, Kapselung/Zugangscode,
+                  #   kompletter Proxy-e2e inkl. WebSocket-Tunnel, Encoding-Fuzzing gegen eine Fixture-CDN
 npm run bench     # Zahlen von oben
 npm run build:filters            # Listen neu kompilieren (braucht Netz)
 npm run build:filters -- --offline   # nur data/lists/*.txt + seed.txt

@@ -14,20 +14,27 @@ import zlib from 'node:zlib';
 import { Buffer } from 'node:buffer';
 
 import config from '../config.js';
-import { log, hostOf, fmtBytes } from '../util.js';
+import { log, hostOf, pathOf, fmtBytes } from '../util.js';
 import { toProxied } from '../encode.js';
 import { rewriteHtml, extractTitle } from './html.js';
 import { rewriteCss } from './css.js';
 import { fetchUpstream, buildUpstreamHeaders, filterResponseHeaders, describeFetchError,
   setCookiesOf } from './fetcher.js';
 import { stripTrackingParams } from '../sessions.js';
-import { errorPage, sendText } from './responses.js';
+import { errorPage, sendText, downloadPage } from './responses.js';
+import { decodeBody, looksTextual, headerText } from './decode.js';
+import { BoundedMap } from '../util.js';
 
 const GIF_1X1 = Buffer.from('R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==', 'base64');
 export const EMPTY_JS = Buffer.from('/* blocked by Chaos ADBrowser */void 0;', 'utf8');
 export const EMPTY_CSS = Buffer.from('/* blocked by Chaos ADBrowser */', 'utf8');
 
 const CACHED_TYPES = new Set(['image', 'font', 'stylesheet', 'script', 'object', 'other']);
+/**
+ * Origins whose `content-encoding` header does not describe their bytes. They get `identity` from
+ * then on (we ask once, fail once, never twice) — the alternative is a black page for the user.
+ */
+const BAD_ENCODING = new BoundedMap(4000);
 const REWRITE_LIMIT = config.maxRewriteBytes;
 
 export class ProxyError extends Error {
@@ -40,7 +47,7 @@ export class ProxyError extends Error {
 export function createProxyHandler(deps) {
   const { engine, store, cache, bootstrapFor } = deps;
 
-  return async function handleProxiedRequest(req, res, { tab, profile, parsed }) {
+  return async function handleProxiedRequest(req, res, { tab, profile, parsed, forceIdentity = false }) {
     const settings = profile.settings;
     const headers = req.headers;
     const dest = headers['sec-fetch-dest'] ?? '';
@@ -116,6 +123,8 @@ export function createProxyHandler(deps) {
     });
     if (!isNavigation && tab.referrer) outHeaders.referer = tab.referrer;
     if (cookieHeader) outHeaders.cookie = cookieHeader;
+    // A host that once lied about its encoding is only ever asked for plain bytes.
+    if (forceIdentity || BAD_ENCODING.has(host)) outHeaders['accept-encoding'] = 'identity';
 
     let up;
     try {
@@ -150,7 +159,7 @@ export function createProxyHandler(deps) {
       res.writeHead(statusCode === 307 || statusCode === 308 ? statusCode : 302, {
         location: proxied,
         'cache-control': 'no-store',
-        'x-chaos-redirect': next.slice(0, 300),
+        'x-chaos-redirect': headerText(next, 300),
       });
       return res.end();
     }
@@ -171,6 +180,23 @@ export function createProxyHandler(deps) {
     const isCss = /text\/css/.test(contentType);
     const isRewritable = (isHtml || isCss) && statusCode < 400
       && Number(uh['content-length'] ?? 1) <= REWRITE_LIMIT;
+
+    // ---------- a file, not a page ----------
+    // attachment (or a binary mime) on a top-level navigation must never be streamed into the tab:
+    // Chrome would download it and leave the frame blank, which looks exactly like a broken proxy.
+    const disposition = String(uh['content-disposition'] ?? '');
+    if (/^\s*attachment/i.test(disposition) && isTopDocument(headers, dest) && method === 'GET') {
+      discard(body);
+      done();
+      const filename = (/filename\*?\s*=\s*"?([^";]+)/i.exec(disposition)?.[1] ?? '').trim();
+      return downloadPage(res, {
+        url: upstream,
+        filename: filename || decodeURIComponent(hostOf(upstream) + pathOf(upstream)).split('/').pop(),
+        size: uh['content-length'] ? fmtBytes(Number(uh['content-length'])) : '',
+        mime: contentType.split(';')[0],
+        proxiedUrl: toProxied(tab.id, upstream) ?? upstream,
+      });
+    }
 
     // ---------- streaming passthrough ----------
     if (!isRewritable) {
@@ -220,7 +246,6 @@ export function createProxyHandler(deps) {
     let raw;
     try {
       raw = await readBody(body, {
-        encoding: pickEncoding(uh['content-encoding']),
         limit: REWRITE_LIMIT,
         onBytes: (n) => { stats.bytes += n; },
       });
@@ -230,6 +255,44 @@ export function createProxyHandler(deps) {
         : sendText(res, 500, String(err.message ?? err));
     }
     done();
+
+    // Compressed bytes must never reach the browser as "HTML" — that is how a proxied SERP ends up
+    // as an empty black frame. Decode (raw deflate, double gzip, sniffing included); if the origin
+    // cannot be made sense of, ask that origin for identity bytes exactly once instead of rendering
+    // garbage, and say so in a page the user can read if even that fails.
+    const dec = decodeBody(raw, uh['content-encoding']);
+    if (!dec.ok) {
+      if (!BAD_ENCODING.has(host) && !forceIdentity) {
+        BAD_ENCODING.set(host, 1);
+        log.warn(`${host}: ${dec.why} — erneuter Versuch ohne Komprimierung`);
+        return handleProxiedRequest(req, res, { tab, profile, parsed, forceIdentity: true });
+      }
+      const why = `${dec.why} (Rohdaten: ${fmtBytes(raw.length)})`;
+      log.warn(`${host}: ${why}`);
+      // A stylesheet or an embedded frame that cannot be read must not break the whole page: an
+      // empty document keeps everything else alive.
+      if (isCss || !isTopDocument(headers, dest)) {
+        return emptyStub(res, isCss ? 'stylesheet' : 'script');
+      }
+      return showError(res, upstream, 'Die Antwort dieses Servers ist nicht lesbar: ' + why
+        + '. Meist ein Proxy/CDN-Problem auf dem Weg dorthin.', 502);
+    }
+    raw = dec.buf;
+    if (isHtml && isTopDocument(headers, dest) && !looksTextual(raw)) {
+      return showError(res, upstream, 'Die Seite lieferte keine HTML-Daten (Binärdaten oder ein Download, '
+        + 'den der Browser hier nicht rendern kann).', 502);
+    }
+    if (isHtml && raw.length === 0) {
+      // HTTP 200 + empty body is what search engines and CDNs answer when they do not like the
+      // request (bot detection, missing cookie, TLS fingerprint). A blank frame would look like a
+      // bug in this browser, so explain it instead.
+      if (isTopDocument(headers, dest)) {
+        return showError(res, upstream, 'Der Server hat geantwortet, aber die Seite ist leer (HTTP 200, '
+          + '0 Bytes). Solche Antworten sind meist Bot-Erkennung oder ein fehlendes Cookie — bitte die '
+          + 'Seite erneut laden oder im Tab die Cookies prüfen.', 502);
+      }
+      return emptyStub(res, isCss ? 'stylesheet' : 'script');
+    }
 
     const docUrl = new URL(upstream);
     const rctx = { sid: tab.id, docUrl, origin: docUrl.origin, kind: 'p' };
@@ -420,13 +483,27 @@ function isAssetCacheable(contentType, status) {
 }
 
 
-function pickEncoding(value) {
-  const enc = String(value ?? '').toLowerCase();
-  if (enc.includes('br')) return 'br';
-  if (enc.includes('gzip')) return 'gzip';
-  if (enc.includes('deflate')) return 'deflate';
-  if (enc.includes('zstd')) return 'zstd';
-  return null;
+/** Only `document` navigations get our error pages — a hidden iframe gets an empty stub instead. */
+/**
+ * Is this the document of one of our own tabs (as opposed to an iframe *inside* a proxied page)?
+ * Chrome tells us directly with `Sec-Fetch-Is-Nested-Navigation: ?1`. Tab documents get a readable
+ * error page; nested frames just get an empty document, because an embed that fails is normal and
+ * a full-screen "this page failed" card inside somebody's comment widget is not.
+ */
+function isTopDocument(headers, dest) {
+  if (headers['sec-fetch-is-nested-navigation'] === '?1') return false;
+  return dest === 'document' || dest === '' || dest === 'iframe' || dest === 'frame';
+}
+
+function emptyStub(res, type) {
+  const body = type === 'stylesheet' ? EMPTY_CSS : EMPTY_JS;
+  res.writeHead(200, {
+    'content-type': type === 'stylesheet' ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8',
+    'content-length': body.length,
+    'cache-control': 'no-store',
+    'x-chaos-blocked': type,
+  });
+  res.end(body);
 }
 
 function pickCharset(contentType, buf) {
@@ -449,7 +526,8 @@ export function decodeWith(buf, charset) {
   }
 }
 
-export async function readBody(body, { encoding, limit, onBytes }) {
+/** Collect a body with a hard cap; decoding is decode.js' job, not ours. */
+export async function readBody(body, { limit, onBytes }) {
   const chunks = [];
   let size = 0;
   for await (const chunk of body) {
@@ -458,16 +536,7 @@ export async function readBody(body, { encoding, limit, onBytes }) {
     onBytes?.(chunk.length);
     chunks.push(chunk);
   }
-  let buf = chunks.length === 1 ? chunks[0] : Buffer.concat(chunks);
-  if (encoding) {
-    try {
-      if (encoding === 'zstd' && zlib.zstdDecompressSync) buf = zlib.zstdDecompressSync(buf);
-      else if (encoding === 'br') buf = zlib.brotliDecompressSync(buf);
-      else if (encoding === 'gzip') buf = zlib.gunzipSync(buf);
-      else if (encoding === 'deflate') buf = zlib.inflateSync(buf);
-    } catch { /* upstream lied about the encoding: keep the bytes as they are */ }
-  }
-  return buf;
+  return chunks.length === 1 ? chunks[0] : Buffer.concat(chunks);
 }
 
 function respondBlocked(res, type, method) {
@@ -508,7 +577,7 @@ function showError(res, url, message, code = 502) {
     'content-type': 'text/html; charset=utf-8',
     'content-length': buf.length,
     'cache-control': 'no-store',
-    'x-chaos-error': String(message).slice(0, 200),
+    'x-chaos-error': headerText(message),
   });
   res.end(buf);
 }

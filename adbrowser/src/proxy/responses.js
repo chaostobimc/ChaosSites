@@ -2,6 +2,8 @@
 
 import { Buffer } from 'node:buffer';
 
+import { headerText } from './decode.js';
+
 export function sendText(res, status, text, extra = {}) {
   const body = Buffer.from(String(text), 'utf8');
   res.writeHead(status, {
@@ -60,6 +62,36 @@ export function errorPage({ url, message, code }) {
 <p class="muted" style="margin-top:16px">Hinweis: Seiten mit strikter IP-/Fingerprint-Prüfung (Google-Logins,
 Streaming mit DRM, Captchas) blockieren Proxy-Zugriffe. Werbung und Tracker werden unabhängig davon entfernt.</p>
 </div></body></html>`;
+}
+
+/**
+ * A top-level navigation that the server wants delivered as a file. Chrome would just download it and
+ * leave the tab sitting on an empty frame, which reads as "the browser is broken" — so we answer with a
+ * page that names the file and hands the user the link. Following that link sends `Sec-Fetch-Dest:
+ * download`, and the normal streaming path takes over from there.
+ */
+export function downloadPage(res, { url, filename, size, mime, proxiedUrl }) {
+  const html = `<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Download · Chaos ADBrowser</title><style>${PAGE_STYLE}</style></head>
+<body><div class="card">
+<h1>⬇️ Diese Adresse ist eine Datei</h1>
+<p><code>${esc(filename || url)}</code> — ${esc(mime || 'unbekannter Typ')}${size ? ', ' + esc(size) : ''}</p>
+<div class="row">
+  <a class="btn" href="${esc(proxiedUrl)}" download${filename ? `="${esc(filename)}"` : ''}>Datei herunterladen</a>
+  <button onclick="history.length>1?history.back():0">Zurück</button>
+</div>
+<p class="muted" style="margin-top:16px">Der Browser in diesem Tab kann keine Dateien „öffnen“, nur herunterladen.
+  Nach dem Download liegt die Datei im Downloads-Ordner des Geräts, auf dem du diese Seite nutzt.</p>
+</div></body></html>`;
+  const buf = Buffer.from(html, 'utf8');
+  res.writeHead(200, {
+    'content-type': 'text/html; charset=utf-8',
+    'content-length': buf.length,
+    'cache-control': 'no-store',
+    'x-chaos-download': headerText(filename || mime || 'file', 120),
+  });
+  res.end(buf);
 }
 
 export function notFoundPage(res, what = 'route') {
