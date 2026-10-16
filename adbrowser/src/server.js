@@ -273,10 +273,23 @@ async function handleRequest(req, res, { ab, handle }) {
   const path = url.pathname;
   const method = req.method.toUpperCase();
 
+  // /healthz stays open: the container healthcheck runs from inside, without a cookie.
+  // /site/* is the public demo tree; the proxy fetches it *from itself*, and that internal
+  // request carries no user cookie — without this exemption a gated instance could not even
+  // serve its own demo pages. It is static, public content, so nothing leaks.
+  const health = path === '/healthz' || path === '/health';
+  const publicDemo = path.startsWith('/site/');
   if (authorized(req) === false) {
     if (method === 'POST' && path === '/access') return handleAccess(req, res);
-    res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-    return res.end(LOGIN_PAGE);
+    if (health) {
+      return sendJson(res, 200, {
+        ok: true, uptime: Math.round((Date.now() - startedAt) / 1000), gated: true,
+      });
+    }
+    if (!publicDemo) {
+      res.writeHead(401, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      return res.end(LOGIN_PAGE);
+    }
   }
 
   if (path === '/healthz' || path === '/health') {

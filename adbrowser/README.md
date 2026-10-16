@@ -159,6 +159,10 @@ Geht **nicht**, und das ist physikalisch/technisch, kein Bug:
 Ein Proxy, der fremde Inhalte ausliefert, ist ein **offener Relay**. Standard-Absicherung:
 
 1. **`CHAOS_ACCESS_CODE` setzen** — sonst kann jeder im Netz den Rechner als Proxy missbrauchen.
+   In `docker-compose.yml` steht der Wert aus `.env` (`cp .env.example .env`); ohne `.env` ist er
+   `change-me-please`. Der Code wird im Browser einmal eingegeben (Login-Seite) und landet als
+   sha256-Cookie `chaos_access` (30 Tage, HttpOnly). `GET /healthz` und die Demo-Dateien unter
+   `/site/*` sind bewusst ausgenommen (Container-Healthcheck bzw. Selbstabruf des Proxys).
 2. **TLS davor** (Caddy/nginx/Traefik). Der Container spricht http auf 6001.
 3. Container ist read-only, `cap_drop: ALL`, kein root, `mem_limit` (siehe `docker-compose.yml`).
 4. `CHAOS_DENY_HOSTS` oder `CHAOS_ALLOW_HOSTS`, falls nur bestimmte Seiten erreichbar sein sollen.

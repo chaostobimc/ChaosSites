@@ -8,8 +8,9 @@ services:
       - "6001:6001"
     environment:
       PORT: 6001
-      # REQUIRED if this is reachable from anywhere but your LAN: this is an open proxy.
-      CHAOS_ACCESS_CODE: "change-me-please"
+      # Code aus .env (CHAOS_ACCESS_CODE=...). .env anlegen und echten Code setzen,
+      # solange das hier nicht nur im LAN läuft: der Proxy ist ein offener Relay.
+      CHAOS_ACCESS_CODE: "${CHAOS_ACCESS_CODE:-change-me-please}"
       CHAOS_DATA_DIR: /data
       # The URL users open (used in copy/links). Put it behind TLS with a reverse proxy.
       # CHAOS_PUBLIC_BASE: "https://browser.example.com"

@@ -4,3 +4,5 @@ node_modules/
 data/lists/*.txt
 data/lists/*.gz
 data/user-rules.txt
+
+.env
