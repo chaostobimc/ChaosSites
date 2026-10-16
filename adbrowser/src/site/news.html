@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chaos Nachrichten — Testseite mit Werbung</title>
+<link rel="stylesheet" href="app.css">
+<!-- die folgenden drei Requests sind genau das, was ein Adblocker abschießen muss -->
+<script src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js" async></script>
+<script src="https://www.googletagmanager.com/gtm.js?id=GTM-TEST01" async></script>
+<script src="https://cdn.taboola.com/libtrc/impl.js" async></script>
+<link rel="stylesheet" href="https://ads.pubmatic.com/MatchServer?r=style">
+</head>
+<body>
+<header class="top">
+  <div class="brand">CHAOS NACHRICHTEN</div>
+  <nav>
+    <a href="news.html">Start</a>
+    <a href="video.html">Video</a>
+    <a href="selftest.html">Selbsttest</a>
+    <a href="index.html">Übersicht</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <div id="ad-top"><b>ANZEIGE · 970×90 Header</b>Diebesgut für Banner-Fans — dieser Kasten muss nach dem Durchladen unsichtbar sein.</div>
+  <div class="ad-intro"><b>ANZEIGE · In-Article-Wallpaper</b>300×600, Autoplay, Ton an. Muss weg sein.</div>
+
+  <div class="two">
+    <article>
+      <span class="kicker">Digital · Testseite</span>
+      <h1>Warum ein Browser mit eingebautem Adblocker schneller ist als einer mit Erweiterung</h1>
+      <p class="byline">Von Red<span></span>aktion · <span id="when">gerade eben</span> · Lesezeit 4 Min.</p>
+
+      <p>Diese Seite ist Absicht: Sie ist voll mit Werbung, Trackern, Consent-Walls und Auto-Play-Overlays.
+        Alles davon stammt von Hosts, die in jeder gängigen Filterliste stehen — <code>googlesyndication.com</code>,
+        <code>googletagmanager.com</code>, <code>taboola.com</code>, <code>pubmatic.com</code> — und läuft hier
+        trotzdem nur ins Leere, wenn der Proxy dazwischengeschaltet ist.</p>
+
+      <figure>
+        <img src="img/photo.svg" alt="Ein technisches Stillleben" width="640" height="360">
+        <figcaption>Ein echtes Bild von dieser Domain (640×360). Es muss <b>laden</b>, die Anzeigen darunter nicht.</figcaption>
+      </figure>
+
+      <div class="ad-container"><b>ANZEIGE · .ad-container</b>Der Klassiker unter den Werbe-Containern. Cosmetic Filtering sollte ihn auf <code>display:none</code> setzen.</div>
+
+      <p>Der wichtige Unterschied zu einer Erweiterung: Ein Proxy entscheidet <em>vor</em> dem ersten Byte.
+        Die Anzeige wird nicht gestartet und dann weggeblendet, sie wird nie angefragt. Das spart Requests,
+        CPU auf dem Gerät und — bei mobilen Verbindungen — Datenvolumen. Messbar wird das hier unten im
+        Selbsttest-Block.</p>
+
+      <blockquote>„Wer Werbung entfernt, nachdem der Browser sie geladen hat, bezahlt zweimal: einmal mit
+        Bytes, einmal mit Jitter.“</blockquote>
+
+      <ins class="adsbygoogle" style="display:inline-block;width:320px;height:100px" data-ad-client="ca-pub-0000" data-ad-slot="0000"></ins>
+      <div class="pre-roll-ad"><b>ANZEIGE · .pre-roll-ad</b>15 Sekunden, überspringbar in 5…</div>
+
+      <h2>Zwischenstand</h2>
+      <p>Wenn du diesen Absatz lesen kannst, ohne von einem Cookie-Banner angeschrien zu werden,
+        arbeitet der Filter. Der Banner unten ist <code>#onetrust-consent-sdk</code> nachempfunden und
+        steht auf der Abschussliste der Annoyance-Liste.</p>
+
+      <div id="taboola-bottom"><b>ANZEIGE · „Das könnte dich auch interessieren“</b>Taboola-Ballast, der meist 400 KB an Bildern nachzieht.</div>
+
+      <h2>Formulare &amp; Cookies</h2>
+      <form id="demo" method="post" action="echo">
+        <label for="t">Nachricht (POST /site/echo)</label>
+        <input id="t" name="text" value="hallo proxy">
+        <label for="c">Cookie schreiben</label>
+        <input id="c" name="cookie" value="chaos_demo=ok; path=/; SameSite=Lax">
+        <button type="submit">Absenden</button>
+      </form>
+      <p class="muted">Das Formular schickt einen <code>POST</code> durch den Proxy an unsere Echo-Strecke.
+        Die Antwort listet alle Header, die der Server wirklich gesehen hat — inklusive der Cookies aus
+        der Session, die das Seiten-JS geschrieben hat.</p>
+
+      <div id="echo-out" class="report" hidden></div>
+
+      <h3>Live-Nachladen per fetch()</h3>
+      <p><button type="button" id="probe">Assets abfragen</button>
+        <span class="muted" id="probe-out">noch nicht getestet</span></p>
+      <table id="probetable" hidden>
+        <thead><tr><th>Ressource</th><th>Erwartung</th><th>Ist</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </article>
+
+    <aside>
+      <div class="box">
+        <h3>Status</h3>
+        <div id="status" class="muted">lade …</div>
+      </div>
+      <div class="box">
+        <h3>Selbsttest</h3>
+        <p style="margin:0;font-size:14px">Gründlichere Prüfaufgaben (URL-Umschreibung, Storage-Isolation,
+          Block-Stubs, Cosmetic-Check) laufen auf der <a href="selftest.html">Selbsttest-Seite</a>.</p>
+      </div>
+      <div class="sponsor-item"><b>ANZEIGE · Sidebar</b>300×250 — sollte ebenfalls nicht zu sehen sein.</div>
+      <div class="box">
+        <h3>Links, die im Proxy bleiben</h3>
+        <ul>
+          <li><a href="video.html">Video-Seite mit Pre-Roll</a></li>
+          <li><a href="/site/index.html">absoluter Pfad ins Demo-Verzeichnis</a></li>
+          <li><a href="https://de.wikipedia.org/wiki/Werbung_im_Internet">externe Seite</a></li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+
+  <div class="consent" id="onetrust-consent-sdk">
+    🔒 Wir und unsere Partner verwenden Cookies und verarbeiten personenbezogene Daten —
+    <button type="button" onclick="this.parentElement.remove()">Alles akzeptieren</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script src="adserver/track.js"></script>
+<script>
+  document.getElementById('when').textContent = new Date().toLocaleString('de-DE');
+</script>
+</body>
+</html>

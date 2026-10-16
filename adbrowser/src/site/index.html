@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chaos ADBrowser · Demo</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">CHAOS DEMO</div>
+  <nav>
+    <a href="news.html">Artikel</a>
+    <a href="video.html">Video</a>
+    <a href="selftest.html">Selbsttest</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <span class="kicker">Offline nutzbar</span>
+  <h1>Diese Demo zeigt, was der Proxy wegmacht</h1>
+  <p class="byline">Alles hier kommt von der eigenen Domain — die Werbe-Requests gehen bewusst auf
+    <code>googlesyndication.com</code>, <code>doubleclick.net</code>, <code>taboola.com</code> und
+    <code>pubmatic.com</code>. Ohne Internet sind sie trotzdem blockiert, weil der Filter
+    <em>vor</em> dem Verbindungsaufbau entscheidet.</p>
+
+  <div class="two">
+    <article>
+      <h2>Die drei Seiten</h2>
+      <p><b><a href="news.html">news.html</a></b> — ein Artikel mit Header-Werbung, In-Article-Wallpaper,
+        Sidebar-MPU, Taboola-Ballast, Cookie-Banner, drei externen Ad-Skripten, einem Ad-Iframe,
+        einem Formular (POST durch den Proxy inkl. Cookie-Roundtrip) und einem Button, der zeigt,
+        welche Subresources geblockt wurden.</p>
+      <p><b><a href="video.html">video.html</a></b> — Fake-Player mit Pre-Roll-Overlay und
+        „Werbung überspringen“-Button. Der Skip-Button bleibt im DOM, damit das Runtime-Script ihn
+        klicken kann, obwohl das Overlay per CSS entfernt ist.</p>
+      <p><b><a href="selftest.html">selftest.html</a></b> — 15 automatische Prüfungen in der echten
+        Laufzeit: URL-Täuschung (inkl. <code>location.pathname</code> für SPAs), Block-Stubs,
+        Cosmetic-Filter, Bildgrößen (1×1 statt Creative), Cookie-Jar, Storage-Isolation,
+        Service-Worker-absent und der WebSocket-Tunnel.</p>
+
+      <h2>Schnell prüfen</h2>
+      <pre class="report" id="quick">…</pre>
+
+      <h2>Anatomie eines Blocks</h2>
+      <table>
+        <thead><tr><th>Was</th><th>Woran der Filter es erkennt</th><th>Antwort</th></tr></thead>
+        <tbody>
+          <tr><td>Ad-Script von einer Host-Domain</td><td><code>||pagead2.googlesyndication.com^</code></td><td>200, leerer JS-Kommentar</td></tr>
+          <tr><td>Tracker-Pfad auf beliebiger Domain</td><td><code>/adserver/</code>, <code>/pagead/</code>, <code>-ad-banner.</code></td><td>200 Stub je nach Typ</td></tr>
+          <tr><td>Werbe-Bild</td><td>Regel mit <code>$image</code></td><td>1×1-GIF (Layout bleibt)</td></tr>
+          <tr><td>Ad-Container im DOM</td><td>Cosmetic-Regeln pro Host</td><td><code>display:none</code> im injizierten CSS</td></tr>
+          <tr><td>Popunder-Navigation</td><td>Host-Regel, optional <code>CHAOS_BLOCK_AD_DOCS=1</code></td><td>leeres Dokument</td></tr>
+        </tbody>
+      </table>
+    </article>
+
+    <aside>
+      <div class="box">
+        <h3>Nutze den Proxy für</h3>
+        <ul>
+          <li>Geräte ohne Adblocker (Konsole, Smart-TV, Arbeits-PC)</li>
+          <li>Seiten, die im Netzwerk deines Anbieters blockiert sind</li>
+          <li>schnelleres Laden auf langsamen Verbindungen</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h3>Grenzen</h3>
+        <ul>
+          <li>Google-/YouTube-Login und CAPTCHAs</li>
+          <li>DRM-Inhalte (Netflix, Disney+ …)</li>
+          <li>Seiten mit Service-Worker-App-Shell</li>
+        </ul>
+      </div>
+      <div class="sponsor-item"><b>ANZEIGE</b>Diese Box ist auch Werbung — und muss verschwinden.</div>
+    </aside>
+  </div>
+</div>
+
+<script>
+  // Mini-Selbsttest direkt hier: ein Ad-Fetch muss einen Stub liefern, ein normaler Fetch echtes JS.
+  (function () {
+    var out = document.getElementById('quick');
+    Promise.all([
+      fetch('pagead/spot.js').then(function (r) { return r.text(); }),
+      fetch('keep.js').then(function (r) { return r.text(); }),
+    ]).then(function (res) {
+      var adBlocked = /blocked by Chaos ADBrowser/.test(res[0]);
+      var localOk = /__chaosLocalOk/.test(res[1]);
+      out.textContent = (adBlocked ? '✔' : '✗') + ' /pagead/spot.js → ' + JSON.stringify(res[0].slice(0, 46)) + '\n'
+        + (localOk ? '✔' : '✗') + ' /keep.js           → echtes Skript geladen\n'
+        + (adBlocked && localOk ? '\nFilter arbeitet: Werbung stubbt, eigener Code läuft.'
+          : '\nDiese Seite wird gerade OHNE den geladen — im Proxy-Tab öffnen, dann greift der Filter.');
+    }).catch(function (e) {
+      out.textContent = 'fetch fehlgeschlagen: ' + e.message;
+    });
+  })();
+</script>
+</body>
+</html>

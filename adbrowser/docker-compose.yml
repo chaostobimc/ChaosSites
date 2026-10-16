@@ -1,0 +1,44 @@
+services:
+  adbrowser:
+    build: .
+    image: chaos-adbrowser:latest
+    container_name: chaos-adbrowser
+    restart: unless-stopped
+    ports:
+      - "6001:6001"
+    environment:
+      PORT: 6001
+      # REQUIRED if this is reachable from anywhere but your LAN: this is an open proxy.
+      CHAOS_ACCESS_CODE: "change-me-please"
+      CHAOS_DATA_DIR: /data
+      # The URL users open (used in copy/links). Put it behind TLS with a reverse proxy.
+      # CHAOS_PUBLIC_BASE: "https://browser.example.com"
+      # Hard per-tab origin isolation: every tab gets <sid>.tabs.example.com. Needs a wildcard
+      # DNS record + a wildcard cert for *.tabs.example.com, then reload the container.
+      # CHAOS_ISOLATE_SUFFIX: "tabs.example.com"
+      # CHAOS_ISOLATE_TLS: "1"
+      # Keep the blocklists fresh (needs outbound HTTPS to codeload.github.com)
+      # CHAOS_FILTERS_AUTO_UPDATE: "1"
+      # CHAOS_FILTERS_UPDATE_HOURS: 24
+      # CHAOS_ALLOW_HOSTS / CHAOS_DENY_HOSTS: gate which sites may be opened at all
+    volumes:
+      - adbrowser-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 768m
+    cpus: 2.0
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:6001/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 4s
+      retries: 3
+      start_period: 6s
+
+volumes:
+  adbrowser-data:

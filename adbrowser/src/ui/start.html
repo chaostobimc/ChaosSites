@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chaos ADBrowser · Start</title>
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<div class="start">
+  <div class="box">
+    <h1>🛡️ Chaos ADBrowser</h1>
+    <p class="sub">Adresse eintippen — der Proxy holt die Seite, wirft Werbung, Tracker, Popunder und
+      Cookie-Banner raus und liefert sie sauber in diesem Tab. Auf jedem Gerät, ohne Installation.</p>
+    <form id="f">
+      <input id="q" placeholder="youtube.com, spiegel.de oder einfach was suchen …" autofocus autocomplete="off">
+      <button type="submit">Öffnen</button>
+    </form>
+    <div class="grid">{{QUICK_LINKS}}</div>
+    <p class="note">Tipp: Das Schild rechts oben zeigt live, wie viel auf dieser Seite schon entfernt wurde.
+      Mit <b>Strg/Cmd + L</b> springst du in die Adressleiste.</p>
+  </div>
+</div>
+<script>
+  function goto(url) {
+    var abs = url[0] === '/' ? location.origin + url : url;
+    if (window.parent !== window) {
+      window.parent.postMessage({ __chaos: 1, kind: 'goto', url: abs }, '*');
+    } else {
+      location.href = '/?goto=' + encodeURIComponent(abs);
+    }
+  }
+  document.getElementById('f').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    goto(document.getElementById('q').value);
+  });
+  document.querySelectorAll('.ql').forEach(function (a) {
+    a.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      goto(a.dataset.url);
+    });
+  });
+</script>
+</body>
+</html>

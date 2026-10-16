@@ -1,0 +1,6 @@
+node_modules/
+*.log
+.DS_Store
+data/lists/*.txt
+data/lists/*.gz
+data/user-rules.txt

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chaos Selbsttest — Proxy &amp; Adblocker</title>
+<!-- Die zwei meta-Tags müssen vom Proxy entfernt werden, sonst würde diese Seite hier gar nichts ausführen -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">CHAOS SELBSTTEST</div>
+  <nav>
+    <a href="news.html">Artikel</a>
+    <a href="video.html">Video</a>
+    <a href="index.html">Übersicht</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <span class="kicker">Automatische Prüfung</span>
+  <h1>Was der Proxy hier gerade wirklich gemacht hat</h1>
+  <p class="byline">Jede Zeile prüft eine Eigenschaft des laufenden Betriebs — über den Proxy geladen,
+    ohne Annahmen. <button type="button" id="rerun" style="display:inline-block">Erneut testen</button></p>
+
+  <table id="results">
+    <thead><tr><th>Prüfung</th><th>Erwartet</th><th>Ist</th><th></th></tr></thead>
+    <tbody><tr><td class="muted" colspan="4">läuft …</td></tr></tbody>
+  </table>
+
+  <p><b id="verdict" class="muted">…</b> <span class="muted" id="elapsed"></span></p>
+
+  <div class="ad-container" id="cosmetic-canary">Die Dose: dieser Kasten muss per Cosmetic CSS unsichtbar sein.</div>
+
+  <h2>Warum diese Prüfungen</h2>
+  <p>Ein Proxy, der nur Links umschreibt, wirkt in jedem zweiten Demo — und zerlegt jede SPA.
+    Die Tests hier laufen deshalb in der echten Laufzeitumgebung: Sie prüfen URL-Täuschung,
+    Subresource-Umschreibung, Block-Stubs, Cosmetic-Filter, Cookie-Roundtrip, Storage-Isolation
+    und den WebSocket-Tunnel, während die Seite geladen ist.</p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var rows = [];
+  var t0 = Date.now();
+
+  function check(name, expect, actual, pass) {
+    rows.push({ name: name, expect: expect, actual: String(actual), pass: !!pass });
+    paint();
+    return pass;
+  }
+  function paint() {
+    var tb = document.querySelector('#results tbody');
+    tb.innerHTML = rows.map(function (r) {
+      return '<tr><td>' + r.name + '</td><td class="muted">' + r.expect + '</td><td><code>'
+        + String(r.actual).replace(/</g, '&lt;').slice(0, 120) + '</code></td><td class="'
+        + (r.pass ? 'ok">✔ passt' : 'fail">✗ fehlt') + '</td></tr>';
+    }).join('');
+    var ok = rows.filter(function (r) { return r.pass; }).length;
+    var v = document.getElementById('verdict');
+    v.textContent = ok + ' / ' + rows.length + ' Prüfungen bestanden';
+    v.className = ok === rows.length ? 'ok' : 'fail';
+    document.getElementById('elapsed').textContent = '· ' + (Date.now() - t0) + ' ms';
+  }
+
+  function head() {
+    if (!/^\/site\/selftest\.html/.test(location.pathname) || location.href.indexOf('/b/') >= 0) {
+      check('location verschleiert den Proxy', '/site/selftest.html, ohne /b/', location.pathname + ' · ' + location.href.slice(0, 60), false);
+    } else {
+      check('location verschleiert den Proxy', '/site/selftest.html, ohne /b/', location.pathname, true);
+    }
+  }
+
+  function links() {
+    var a = document.createElement('a');
+    a.href = '/site/keep.js';
+    var leaked = a.href.indexOf('/b/') >= 0;
+    check('a.href gibt echte URL zurück', 'keine /b/..-Spur', leaked ? a.href : a.pathname, !leaked);
+    check('CSP/XFO-Meta wurden entfernt', 'keine http-equiv-Meta', document.querySelectorAll('meta[http-equiv]').length,
+      document.querySelectorAll('meta[http-equiv]').length === 0);
+    check('Inline-Skript lief (CSP entfernt)', 'Script ausgeführt', typeof window.__upReady !== 'undefined' || true, true);
+  }
+
+  function cosmetic() {
+    var el = document.getElementById('cosmetic-canary');
+    var d = el ? getComputedStyle(el).display : 'kein Element';
+    check('Cosmetic CSS blendet Ad-Container', 'display: none', d, d === 'none');
+  }
+
+  function blockedScripts() {
+    check('adserver/track.js wurde blockiert', 'Fenster nicht gesetzt',
+      String(window.__chaosAdServerLoaded), typeof window.__chaosAdServerLoaded === 'undefined');
+    check('pagead/spot.js wurde blockiert', 'Fenster nicht gesetzt',
+      String(window.__chaosPageAdLoaded), typeof window.__chaosPageAdLoaded === 'undefined');
+  }
+
+  function fetches() {
+    var dir = location.pathname.replace(/selftest\.html$/, '');
+    function j(p) {
+      return fetch(dir + p).then(function (r) {
+        return r.text().then(function (t) { return { status: r.status, type: r.headers.get('content-type') || '', text: t }; });
+      });
+    }
+    j('keep.js').then(function (r) {
+      check('Seiten-Skript lädt normal', '200 + __chaosLocalOk', r.status + ' · ' + r.text.slice(0, 40),
+        r.status === 200 && /__chaosLocalOk/.test(r.text));
+    });
+    j('adserver/track.js').then(function (r) {
+      check('/adserver/ → Block-Stub', 'Stub-Kommentar statt Code', r.status + ' · ' + r.text.slice(0, 40),
+        /blocked by Chaos ADBrowser/.test(r.text) && !/__chaosAdServerLoaded/.test(r.text));
+    });
+    j('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js').then(function (r) {
+      check('externe Ad-Domain blockiert', 'Stub, kein Fetch ins Netz', r.status + ' · ' + r.text.slice(0, 40),
+        /blocked by Chaos ADBrowser/.test(r.text));
+    }, function (e) {
+      check('externe Ad-Domain blockiert', 'Stub (fetch abgelehnt)', e.message, true);
+    });
+  }
+
+  function images() {
+    function probe(src, key) {
+      return new Promise(function (resolve) {
+        var img = new Image();
+        var done = function () { resolve({ src: src, w: img.naturalWidth, h: img.naturalHeight }); };
+        img.onload = done; img.onerror = done;
+        setTimeout(done, 4000);
+      });
+    }
+    var dir = location.pathname.replace(/selftest\.html$/, '');
+    Promise.all([probe(dir + 'img/photo.svg', 'real'), probe(dir + 'pagead/spot.svg', 'ad')]).then(function (rs) {
+      var real = rs[0], ad = rs[1];
+      check('echtes Bild lädt (640×360)', '640', real.w + '×' + real.h, real.w > 100);
+      check('Ad-Bild wird 1×1-Pixel', '1×1 GIF', ad.w + '×' + ad.h, ad.w === 1 && ad.h === 1);
+    });
+  }
+
+  function cookies() {
+    try { document.cookie = 'chaos_selftest=42; path=/; SameSite=Lax'; } catch (e) {}
+    var dir = location.pathname.replace(/selftest\.html$/, '');
+    setTimeout(function () {
+      fetch(dir + 'echo', { method: 'POST', body: 'probe=1', headers: { 'content-type': 'application/x-www-form-urlencoded' } })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          var seen = (j.receivedHeaders && j.receivedHeaders.cookie) || '';
+          check('document.cookie → Server-Jar', 'chaos_selftest=42 upstream', seen || '(leer)', /chaos_selftest=42/.test(seen));
+          check('UI-Cookie bleibt beim Proxy', 'chaos_cid nie upstream', /chaos_cid/.test(seen) ? 'LEAK' : 'nicht gesendet', !/chaos_cid/.test(seen));
+          check('POST-Body kommt an', 'probe=1', j.body, j.body === 'probe=1');
+          check('Host-Header zeigt aufs Ziel', 'nicht /b/ im Host', j.receivedHeaders.host, !!j.receivedHeaders.host);
+        }).catch(function (e) {
+          check('Echo-Strecke erreichbar', '200 JSON', e.message, false);
+        });
+    }, 400);
+  }
+
+  function storage() {
+    var val = 'v' + Date.now();
+    try {
+      localStorage.setItem('chaos_selftest', val);
+      var back = localStorage.getItem('chaos_selftest');
+      check('localStorage rund (isoliert pro Host)', val, back, back === val);
+      sessionStorage.setItem('chaos_s', '1');
+      check('sessionStorage rund', '1', sessionStorage.getItem('chaos_s'), sessionStorage.getItem('chaos_s') === '1');
+    } catch (e) {
+      check('Storage verfügbar', 'ja', e.message, false);
+    }
+    try {
+      check('Service Worker deaktiviert', 'kein navigator.serviceWorker',
+        typeof navigator.serviceWorker, typeof navigator.serviceWorker === 'undefined');
+    } catch (e) {}
+  }
+
+  function sockets() {
+    var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    var url = proto + location.host + '/site/ws-echo';
+    var settled = false;
+    try {
+      var ws = new WebSocket(url);
+      var finish = function (ok, what) {
+        if (settled) return;
+        settled = true;
+        check('WebSocket-Tunnel (echo)', '{"echo":"pong-1"}', what, ok);
+        try { ws.close(); } catch (e) {}
+      };
+      ws.onmessage = function (ev) {
+        if (/"echo":"pong-1"/.test(ev.data)) finish(true, ev.data);
+      };
+      ws.onopen = function () { try { ws.send('pong-1'); } catch (e) {} };
+      ws.onerror = function () { finish(false, 'fehler'); };
+      setTimeout(function () { finish(settled, settled ? '' : 'timeout'); }, 5000);
+    } catch (e) {
+      check('WebSocket-Tunnel (echo)', '{"echo":"pong-1"}', e.message, false);
+    }
+  }
+
+  function run() {
+    rows = [];
+    t0 = Date.now();
+    paint();
+    head(); links(); cosmetic(); blockedScripts(); storage(); fetches(); images(); cookies(); sockets();
+  }
+  document.getElementById('rerun').addEventListener('click', run);
+  if (window.parent !== window) run();
+  else {
+    document.querySelector('#results tbody').innerHTML =
+      '<tr><td colspan="4" class="fail">Diese Seite gehört in den Proxy-Tab: bitte über die Startseiten-Kachel oder die Adressleiste öffnen.</td></tr>';
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Chaos ADBrowser</title>
+<meta name="theme-color" content="#0b0d12">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<div id="app">
+  <header id="chrome">
+    <div class="tabbar" id="tabbar">
+      <div class="tabs" id="tabs"></div>
+      <button class="iconbtn newtab" id="newtab" title="Neuer Tab (Strg+T)" aria-label="Neuer Tab">+</button>
+      <button class="iconbtn panelbtn" id="panelbtn" title="Adblocker &amp; Einstellungen" aria-label="Einstellungen">
+        <span class="shield" id="shield">🛡️</span><b id="tab-blocked">0</b>
+      </button>
+    </div>
+
+    <div class="toolbar">
+      <div class="navbtns">
+        <button class="iconbtn" id="back" title="Zurück" aria-label="Zurück">←</button>
+        <button class="iconbtn" id="fwd" title="Vor" aria-label="Vor">→</button>
+        <button class="iconbtn" id="reload" title="Neu laden" aria-label="Neu laden">⟳</button>
+        <button class="iconbtn" id="home" title="Startseite" aria-label="Startseite">⌂</button>
+      </div>
+      <form class="omnibox" id="omnibox" autocomplete="off">
+        <span class="lock" id="lock" title="Status">•</span>
+        <input id="address" type="text" spellcheck="false" enterkeyhint="go"
+               placeholder="Suchen oder Adresse eingeben — z. B. youtube.com/watch?v=…" aria-label="Adresse">
+        <button class="ghost" id="clearaddr" type="button" title="Leeren" aria-label="Leeren">×</button>
+        <button class="go" id="go" type="submit">Los</button>
+      </form>
+      <div class="rightbtns">
+        <button class="iconbtn" id="external" title="In normalem Tab öffnen" aria-label="Extern öffnen">↗</button>
+        <button class="iconbtn" id="menu" title="Menü" aria-label="Menü">⋯</button>
+      </div>
+    </div>
+    <div id="progress" hidden><div></div></div>
+  </header>
+
+  <main id="stage">
+    <div id="frames"></div>
+    <div id="empty" hidden></div>
+  </main>
+
+  <aside id="panel" aria-hidden="true">
+    <div class="panel-head">
+      <h2>Chaos ADBrowser</h2>
+      <button class="iconbtn" id="closepanel" title="Schließen">×</button>
+    </div>
+    <nav class="panel-tabs" id="paneltabs">
+      <button data-tab="ad" class="on">Adblocker</button>
+      <button data-tab="lists">Filter</button>
+      <button data-tab="hist">Verlauf</button>
+      <button data-tab="about">Info</button>
+    </nav>
+    <div class="panel-body">
+      <section data-panel="ad">
+        <div class="hero">
+          <div><b id="stat-blocked">0</b><span>geblockt</span></div>
+          <div><b id="stat-saved">0 KB</b><span>Daten gespart</span></div>
+          <div><b id="stat-cache">0%</b><span>Cache-Treffer</span></div>
+        </div>
+        <div class="toplist">
+          <h3>Meiste Blocks (dieser Tab)</h3>
+          <ul id="tophosts"><li class="muted">Noch nichts geblockt.</li></ul>
+        </div>
+        <h3>Schalter</h3>
+        <label class="sw"><input type="checkbox" data-setting="adblock"><span>Adblocker aktiv</span><em>Netzwerk-Filter: Ads, Tracker, Popunder</em></label>
+        <label class="sw"><input type="checkbox" data-setting="cosmetic"><span>Elemente ausblenden</span><em>Cosmetic Filtering per CSS — blendet Anzeigen-Container aus</em></label>
+        <label class="sw"><input type="checkbox" data-setting="enhanced"><span>Overlay-Killer</span><em>Cookie-Banner, Abo-Popups, „Adblocker aus“-Hinweise</em></label>
+        <label class="sw"><input type="checkbox" data-setting="autoSkipAds"><span>„Werbung überspringen“ automatisch klicken</span></em></label>
+        <label class="sw"><input type="checkbox" data-setting="images"><span>Bilder laden</span></label>
+        <label class="sw"><input type="checkbox" data-setting="media"><span>Video/Audio laden</span></label>
+        <label class="sw"><input type="checkbox" data-setting="stripTracking"><span>Tracking-Parameter entfernen</span><em>utm_*, fbclid, gclid …</em></label>
+        <label class="sw"><input type="checkbox" data-setting="websockets"><span>WebSockets erlauben</span></label>
+        <label class="sw"><input type="checkbox" data-setting="desktopUa"><span>Desktop-User-Agent</span><em>Aus = Smartphone-Layout</em></label>
+        <label class="sw"><input type="checkbox" data-setting="strictDocs"><span>Auch Werbe-Navigationen blockieren</span><em>Popunder strenger behandeln — kann legitime Weiterleitungen blockieren</em></label>
+        <h3>Turbo-Modus</h3>
+        <div class="seg" id="scriptmode">
+          <button data-scripts="allow" class="on">JS erlaubt</button>
+          <button data-scripts="ads-only">Nur Werbe-JS</button>
+          <button data-scripts="block">Kein JS</button>
+        </div>
+        <p class="muted">„Kein JS“ ist brutal schnell, aber moderne Seiten (YouTube, Reddit) brauchen JavaScript. Nutze es für Artikel, Foren und statische Seiten.</p>
+      </section>
+
+      <section data-panel="lists" hidden>
+        <h3>Filter-Engine</h3>
+        <dl class="kv" id="engineinfo"></dl>
+        <h3>Eigene Regeln</h3>
+        <p class="muted">AdBlock-Plus-Syntax, eine Regel pro Zeile — <code>||domain^</code>, <code>##.selector</code>, <code>@@</code> als Ausnahme.</p>
+        <textarea id="userrules" rows="7" spellcheck="false" placeholder="||example.com/ads/^&#10;example.com##.promo-banner"></textarea>
+        <div class="row">
+          <button class="btn primary" id="saverules">Anwenden</button>
+          <button class="btn" id="clearfilters">Zurücksetzen</button>
+          <span id="rulesmsg" class="muted"></span>
+        </div>
+        <h3>Listen aktualisieren</h3>
+        <div class="row">
+          <button class="btn" id="updatefilters">Jetzt aktualisieren</button>
+          <span id="upmsg" class="muted"></span>
+        </div>
+        <h3>Bereinigung</h3>
+        <div class="row">
+          <button class="btn" data-clear="cache">Cache leeren</button>
+          <button class="btn" data-clear="cookies">Cookies löschen</button>
+          <button class="btn" data-clear="history">Verlauf löschen</button>
+        </div>
+      </section>
+
+      <section data-panel="hist" hidden>
+        <h3>Verlauf</h3>
+        <input id="histsearch" class="search" placeholder="suchen …">
+        <ul id="history" class="list"></ul>
+      </section>
+
+      <section data-panel="about" hidden>
+        <h3>Was das hier ist</h3>
+        <p>Ein Browser als Website: Du tippst eine Adresse ein, der Server ruft die Seite ab,
+          wirft Werbung und Tracker raus und liefert das saubere Ergebnis in einen Frame.
+          Dadurch läuft jede Seite werbefrei — auch auf Geräten ohne Adblocker, im
+          Privatmodus, auf der Arbeitsschul-IP und auf Seiten, die im Netz gefiltert sind.</p>
+        <h3>Schnell-Tasten</h3>
+        <ul class="kbd">
+          <li><b>Strg/Cmd + L</b> Adresse</li>
+          <li><b>Strg/Cmd + T</b> neuer Tab</li>
+          <li><b>Strg/Cmd + W</b> Tab schließen</li>
+          <li><b>Alt + ←/→</b> zurück/vor</li>
+          <li><b>Strg/Cmd + 1…9</b> Tab wechseln</li>
+        </ul>
+        <h3>Sicherheit</h3>
+        <p class="muted" id="securitynote"></p>
+        <h3>Server</h3>
+        <dl class="kv" id="serverinfo"></dl>
+      </section>
+    </div>
+  </aside>
+</div>
+<script src="/assets/app.js" type="module"></script>
+</body>
+</html>

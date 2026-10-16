@@ -1,0 +1,29 @@
+{
+  "name": "chaos-adbrowser",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chaos ADBrowser - a self-hosted, proxy-based web browser with a built-in ad blocker. Fast, Docker-ready.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "main": "src/server.js",
+  "bin": {
+    "chaos-adbrowser": "src/server.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "build:filters": "node scripts/build-filters.mjs",
+    "test": "node --test test/*.test.mjs",
+    "bench": "node test/bench.mjs",
+    "test:proxy": "node --test test/proxy.test.mjs",
+    "test:unit": "node --test test/unit.test.mjs test/adblock.test.mjs",
+    "clean": "rm -rf data/user-rules.txt data/lists && npm run data:reset"
+  },
+  "dependencies": {
+    "undici": "^7.1.0",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chaos Player — Demo mit Pre-Roll</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">CHAOS PLAYER</div>
+  <nav>
+    <a href="news.html">Artikel</a>
+    <a href="video.html">Video</a>
+    <a href="selftest.html">Selbsttest</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <span class="kicker">Demo</span>
+  <h1>Pre-Roll, Overlay-Anzeige, Skip-Button — und was der Filter damit macht</h1>
+  <p class="byline">Der Player ist absichtlich fake: Er zeigt exakt die DOM-Struktur, die YouTube &amp; Co.
+    für Werbung benutzen, inklusive „Werbung überspringen“-Button.</p>
+
+  <div class="player" id="player">
+    <div class="stage" id="stage">Bereit — <button type="button" id="play">Abspielen</button></div>
+    <div class="ad-overlay ytp-ad-module" id="adoverlay" hidden>
+      <div>
+        <div class="ytp-ad-overlay-slot">ANZEIGE · Overlay 300×250 — sollte per Cosmetic CSS unsichtbar sein</div>
+        <div class="pre-roll-ad">ANZEIGE · Pre-Roll läuft…</div>
+      </div>
+      <button type="button" class="skip ytp-ad-skip-button" id="skip">Werbung überspringen</button>
+    </div>
+  </div>
+
+  <p><span class="badge" id="state">idle</span> <span class="muted" id="clock">0.0 s</span></p>
+
+  <h2>Was hier passiert</h2>
+  <p>Der Player zieht sich „Werbe-Creatives“ von Hosts, die in jeder Filterliste stehen. Im Proxy
+    sterben diese Requests als Block-Stub, noch bevor ein Byte über das Netz geht — der
+    Overlay-Kasten wird zusätzlich per CSS entfernt. Der Skip-Button bleibt erhalten: Ein
+    überbleibendes Ad-Overlay kann der Nutzer also immer noch selbst wegklicken.</p>
+
+  <pre class="report" id="log">Log …</pre>
+</div>
+
+<script>
+  var logEl = document.getElementById('log');
+  var state = document.getElementById('state');
+  function log(m) { logEl.textContent = new Date().toLocaleTimeString('de-DE') + '  ' + m + '\n' + logEl.textContent.slice(0, 1200); }
+
+  document.getElementById('play').addEventListener('click', function () {
+    var overlay = document.getElementById('adoverlay');
+    overlay.hidden = false;
+    state.textContent = 'ad';
+    log('Pre-Roll eingeblendet, lade Creative …');
+    fetch('https://static.doubleclick.net/instream/ad_status.js')
+      .then(function (r) { return r.text(); })
+      .then(function (r) {
+        return r.text().then(function (t) {
+          log('doubleclick-Creative: HTTP ' + r.status + ' · antwort = ' + JSON.stringify(t.slice(0, 44)));
+        });
+      })
+      .catch(function (e) { log('Creative blockiert: ' + e.message); });
+    fetch('pagead/spot.js').then(function (r) {
+      return r.text().then(function (t) { log('/pagead/spot.js → ' + r.status + ' ' + JSON.stringify(t.slice(0, 44))); });
+    });
+    var t0 = Date.now();
+    var clock = document.getElementById('clock');
+    var tick = setInterval(function () { clock.textContent = ((Date.now() - t0) / 1000).toFixed(1) + ' s'; }, 100);
+    setTimeout(function () {
+      var btn = document.getElementById('skip');
+      var cs = btn ? getComputedStyle(btn.closest('.ytp-ad-module') || btn).display : '–';
+      log('Overlay-Display: ' + cs + ' · Skip-Button sichtbar: ' + !!(btn && btn.offsetParent !== null));
+      if (window.__chaosAutoSkipClicked) log('✓ Skip wurde vom Runtime-Autoklick gedrückt');
+      clearInterval(tick);
+      state.textContent = 'content';
+      overlay.hidden = true;
+      document.getElementById('stage').textContent = 'Video läuft (ohne Werbung)';
+    }, 2600);
+  });
+</script>
+</body>
+</html>

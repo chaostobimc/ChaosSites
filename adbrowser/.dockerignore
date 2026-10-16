@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log*
+*.log
+.git
+.github
+data/lists
+data/user-rules.txt
+data/adblock.json
+test
+README.md
+docker-compose.yml
+Dockerfile
+.env

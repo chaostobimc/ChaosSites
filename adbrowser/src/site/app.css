@@ -1,0 +1,41 @@
+/* Chaos ADBrowser – demo site styles (deliberately normal-looking, so removed ads are obvious) */
+:root { color-scheme: light }
+* { box-sizing: border-box }
+body { margin: 0; font: 16px/1.6 Georgia, "Times New Roman", serif; color: #17181c; background: #fff }
+header.top { border-bottom: 3px solid #b30000; background: #fff; padding: 10px 20px; display: flex; gap: 18px; align-items: center }
+header.top .brand { font: 700 22px/1 Helvetica, Arial, sans-serif; color: #b30000; letter-spacing: -.5px }
+header.top nav a { color: #333; text-decoration: none; font: 600 13px Helvetica, Arial, sans-serif; margin-right: 14px }
+.wrap { max-width: 940px; margin: 0 auto; padding: 18px 20px 60px }
+h1 { font: 700 30px/1.2 Helvetica, Arial, sans-serif; margin: 8px 0 6px }
+.kicker { font: 700 11px/1 Helvetica, Arial, sans-serif; text-transform: uppercase; letter-spacing: .1em; color: #b30000 }
+.byline { color: #6b6b6b; font: 13px Helvetica, Arial, sans-serif; margin-bottom: 18px }
+p { margin: 0 0 16px }
+figure { margin: 0 0 18px }
+figure img { width: 100%; height: auto; display: block; border-radius: 6px }
+figcaption { font: 12px/1.4 Helvetica, Arial, sans-serif; color: #707070; margin-top: 6px }
+.two { display: grid; grid-template-columns: 1fr 300px; gap: 26px }
+aside .box { border: 1px solid #e3e3e3; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; background: #fafafa }
+aside h3 { margin: 0 0 8px; font: 700 13px Helvetica, Arial, sans-serif; text-transform: uppercase; letter-spacing: .05em }
+aside ul { margin: 0; padding-left: 18px; font-size: 14px }
+blockquote { margin: 0 0 18px; padding: 12px 18px; border-left: 4px solid #b30000; background: #fbf6f6; font-style: italic }
+form { display: grid; gap: 8px; max-width: 460px }
+input, textarea, button { font: inherit; padding: 9px 11px; border-radius: 7px; border: 1px solid #cfcfcf }
+button { background: #b30000; border: 0; color: #fff; font: 700 14px Helvetica, Arial, sans-serif; cursor: pointer; justify-self: start }
+pre.report { background: #0f1219; color: #d6e2ff; padding: 14px; border-radius: 10px; font: 12.5px/1.55 ui-monospace, Menlo, monospace; overflow: auto }
+table { border-collapse: collapse; width: 100%; font: 13px Helvetica, Arial, sans-serif }
+th, td { border-bottom: 1px solid #e8e8e8; text-align: left; padding: 7px 8px }
+.ok { color: #0a7d3c; font-weight: 700 }
+.fail { color: #c02020; font-weight: 700 }
+.muted { color: #777 }
+.ad-intro, #ad-top, #googlead, .ad-container, .pre-roll-ad, .sponsor-item, #taboola-bottom, #onetrust-consent-sdk, #qc-cmp2-container {
+  border: 2px dashed #d9534f; background: repeating-linear-gradient(45deg, #fff5f5, #fff5f5 12px, #ffe9e9 12px, #ffe9e9 24px);
+  border-radius: 8px; padding: 14px; margin: 0 0 18px; font: 700 12px/1.4 Helvetica, Arial, sans-serif; color: #a33;
+}
+.ad-intro b, #ad-top b, #googlead b, .ad-container b, .pre-roll-ad b, .sponsor-item b { display: block; font-size: 14px; margin-bottom: 4px }
+.consent { position: fixed; inset: auto 0 0 0; background: #1d1f27; color: #eee; padding: 14px 18px; display: flex; gap: 14px; align-items: center; justify-content: center; font: 13px Helvetica, Arial, sans-serif; z-index: 9999 }
+.consent button { background: #fff; color: #111; padding: 7px 14px }
+.player { position: relative; background: #000; aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; margin-bottom: 18px }
+.player .stage { position: absolute; inset: 0; display: grid; place-items: center; color: #cfe0ff; font: 600 15px Helvetica, Arial, sans-serif; text-align: center; padding: 20px }
+.player .ad-overlay { position: absolute; inset: 0; background: #121622; color: #ffd9d9; display: grid; place-items: center; gap: 10px; text-align: center }
+.player .skip { position: absolute; right: 12px; bottom: 12px; background: #fff; color: #111; border: 0; padding: 9px 13px; border-radius: 6px; font: 700 13px Helvetica, Arial, sans-serif; cursor: pointer }
+.badge { display: inline-block; border-radius: 999px; padding: 3px 10px; font: 700 11px Helvetica, Arial, sans-serif; background: #eef2ff; color: #2a3d7a }

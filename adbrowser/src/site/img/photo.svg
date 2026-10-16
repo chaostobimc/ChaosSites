@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2a4a"/><stop offset="1" stop-color="#0d1526"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#g)"/>
+  <g fill="none" stroke="#4d7cff" stroke-opacity=".55" stroke-width="1.5">
+    <path d="M0 260 L120 190 L230 230 L340 140 L450 185 L560 100 L640 130"/>
+    <path d="M0 300 L110 250 L240 275 L350 205 L470 240 L580 170 L640 195" stroke-opacity=".3"/>
+  </g>
+  <g font-family="Helvetica,Arial,sans-serif" fill="#dbe4ff">
+    <text x="28" y="52" font-size="21" font-weight="700">Echtes Bild von dieser Domain</text>
+    <text x="28" y="78" font-size="13" fill="#9fb0dd">640×360 · SVG · darf geladen werden</text>
+  </g>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="11" fill="#7f8fc4">
+    <text x="28" y="336">chaos-adbrowser · demo asset · kein tracker</text>
+  </g>
+</svg>
