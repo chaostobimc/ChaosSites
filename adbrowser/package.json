@@ -20,7 +20,7 @@
     "bench": "node test/bench.mjs",
     "test:proxy": "node --test test/proxy.test.mjs",
     "test:unit": "node --test test/unit.test.mjs test/adblock.test.mjs",
-    "clean": "rm -rf data/user-rules.txt data/lists && npm run data:reset"
+    "clean": "rm -f data/user-rules.txt && rm -rf data/lists"
   },
   "dependencies": {
     "undici": "^7.1.0",
