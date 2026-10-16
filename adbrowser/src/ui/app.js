@@ -294,7 +294,7 @@ async function submitAddress(value) {
   if (input === 'chaos:stats') { openPanel('ad'); return; }
   if (/^(start|\/start|about:chaos)$/i.test(input)) {
     const t = activeTab();
-    if (t) t.el.src = '/start'; else await newTab('');
+    if (t) armFrame(t, '/start'); else await newTab('');
     return;
   }
   if (input.startsWith('/b/')) { // a proxied path was pasted in
@@ -530,7 +530,7 @@ function wire() {
   $('#reload').addEventListener('click', () => {
     const t = activeTab();
     if (!t) return;
-    try { t.el.contentWindow.location.reload(); } catch { t.el.src = t.el.src; }
+    try { t.el.contentWindow.location.reload(); } catch { armFrame(t, t.el.src); }
   });
   $('#back').addEventListener('click', () => frameNav(-1));
   $('#fwd').addEventListener('click', () => frameNav(1));
